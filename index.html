@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Escaneamento Corporal</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --green: #00FF8C;
+  --green-dim: rgba(0,255,140,0.18);
+  --green-glow: rgba(0,255,140,0.55);
+  --dark: #0a1612;
+  --surface: #122318;
+  --surface2: #1a2f23;
+  --text: #e8f5ee;
+  --text2: #7aada0;
+  --text3: #3a6050;
+  --border: rgba(0,255,140,0.12);
+  --border2: rgba(0,255,140,0.28);
+}
+html, body { width:100%; height:100%; background:var(--dark); color:var(--text); font-family:'DM Sans',sans-serif; overflow:hidden; }
+.app { width:100%; height:100vh; display:flex; flex-direction:column; }
+
+/* TOPBAR */
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 18px 10px; border-bottom:0.5px solid var(--border); flex-shrink:0; background:var(--dark); }
+.logo { display:flex; align-items:center; gap:8px; }
+.logo-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green-glow); }
+.logo-text { font-size:14px; font-weight:600; letter-spacing:-0.02em; color:var(--text); }
+.step-badge { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; background:var(--surface); padding:4px 10px; border-radius:20px; border:0.5px solid var(--border); }
+
+/* SCREENS */
+.screen { display:none; flex:1; flex-direction:column; overflow:hidden; }
+.screen.active { display:flex; }
+
+/* ──── S1: METRICS ──── */
+.s1-scroll { flex:1; overflow-y:auto; padding:20px 18px 8px; }
+.s1-title { font-size:20px; font-weight:600; letter-spacing:-0.03em; margin-bottom:3px; }
+.s1-sub { font-size:13px; color:var(--text2); margin-bottom:20px; }
+.seg { display:grid; grid-template-columns:1fr 1fr; background:var(--surface); border-radius:12px; padding:4px; gap:4px; margin-bottom:20px; }
+.seg-btn { border:none; background:transparent; border-radius:9px; padding:10px; font-size:14px; font-weight:500; cursor:pointer; color:var(--text2); font-family:'DM Sans',sans-serif; transition:all 0.2s; }
+.seg-btn.active { background:var(--green); color:#0a1612; }
+.fields { display:flex; flex-direction:column; gap:12px; }
+.field-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.field { display:flex; flex-direction:column; gap:5px; }
+.field label { font-size:10px; color:var(--text3); font-weight:500; text-transform:uppercase; letter-spacing:0.07em; font-family:'DM Mono',monospace; }
+.field input { background:var(--surface); border:0.5px solid var(--border2); border-radius:10px; padding:11px 13px; font-size:15px; color:var(--text); font-family:'DM Sans',sans-serif; outline:none; -webkit-appearance:none; transition:border-color 0.2s; }
+.field input:focus { border-color:var(--green); background:var(--surface2); }
+.field input::placeholder { color:var(--text3); }
+.sec-label { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.07em; margin:16px 0 10px; }
+.divider { height:0.5px; background:var(--border); margin:4px 0; }
+.btn-cta { margin:16px 18px 28px; padding:16px; background:var(--green); color:#0a1612; border:none; border-radius:14px; font-size:15px; font-weight:700; cursor:pointer; font-family:'DM Sans',sans-serif; display:flex; align-items:center; justify-content:center; gap:8px; letter-spacing:-0.01em; box-shadow:0 0 24px rgba(0,255,140,0.35); transition:all 0.2s; flex-shrink:0; }
+.btn-cta:active { opacity:0.85; transform:scale(0.98); }
+
+/* ──── S2: CAMERA ──── */
+.cam-wrap { position:relative; flex:1; background:#000; overflow:hidden; }
+#video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+#canvas-overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+
+.guide-frame { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.guide-oval { width:140px; height:310px; border:1.5px dashed rgba(0,255,140,0.5); border-radius:70px; position:relative; }
+.guide-oval .scan-line { position:absolute; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--green),transparent); top:10%; border-radius:1px; animation:beam 2s ease-in-out infinite; display:none; }
+@keyframes beam { 0%,100%{top:5%} 50%{top:90%} }
+.corner { position:absolute; width:18px; height:18px; }
+.c-tl { top:20px; left:20px; border-top:2px solid var(--green); border-left:2px solid var(--green); border-radius:3px 0 0 0; filter:drop-shadow(0 0 4px var(--green-glow)); }
+.c-tr { top:20px; right:20px; border-top:2px solid var(--green); border-right:2px solid var(--green); border-radius:0 3px 0 0; filter:drop-shadow(0 0 4px var(--green-glow)); }
+.c-bl { bottom:20px; left:20px; border-bottom:2px solid var(--green); border-left:2px solid var(--green); border-radius:0 0 0 3px; filter:drop-shadow(0 0 4px var(--green-glow)); }
+.c-br { bottom:20px; right:20px; border-bottom:2px solid var(--green); border-right:2px solid var(--green); border-radius:0 0 3px 0; filter:drop-shadow(0 0 4px var(--green-glow)); }
+
+.cam-bottom { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(10,22,18,0.96)); padding:28px 18px 36px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.cam-msg { font-size:14px; font-weight:500; color:var(--green); text-shadow:0 0 10px var(--green-glow); text-align:center; }
+.cam-sub { font-size:12px; color:var(--text2); text-align:center; }
+.prog-bar { width:200px; height:3px; background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden; }
+.prog-fill { height:100%; background:var(--green); width:0%; transition:width 0.22s; border-radius:2px; box-shadow:0 0 6px var(--green-glow); }
+.cam-btns { display:flex; flex-direction:column; gap:8px; width:100%; }
+#btn-capture { width:100%; padding:14px; background:var(--green); color:#0a1612; border:none; border-radius:12px; font-size:15px; font-weight:700; font-family:'DM Sans',sans-serif; cursor:pointer; box-shadow:0 0 20px rgba(0,255,140,0.3); }
+#btn-capture:disabled { opacity:0.35; }
+.btn-back { width:100%; padding:12px; background:transparent; border:0.5px solid rgba(255,255,255,0.12); border-radius:12px; color:var(--text2); font-size:13px; font-family:'DM Sans',sans-serif; cursor:pointer; }
+
+/* error */
+.cam-error { display:none; flex-direction:column; align-items:center; justify-content:center; flex:1; padding:32px 20px; text-align:center; gap:12px; }
+.cam-error h3 { font-size:17px; font-weight:600; }
+.cam-error p { font-size:13px; color:var(--text2); line-height:1.6; }
+.err-tip { font-size:12px; color:var(--text3); background:var(--surface); padding:12px 16px; border-radius:10px; border:0.5px solid var(--border); text-align:left; line-height:1.8; white-space:pre-line; }
+
+/* ──── S3: RESULT ──── */
+.s3-wrap { flex:1; position:relative; overflow:hidden; background:#000; }
+#result-canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+.markers-layer { position:absolute; inset:0; pointer-events:none; }
+.marker { position:absolute; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; animation:markerIn 0.4s ease both; }
+@keyframes markerIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.5)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+.marker-dot { width:10px; height:10px; border-radius:50%; background:var(--green); box-shadow:0 0 0 3px rgba(0,255,140,0.25), 0 0 12px var(--green-glow); }
+.marker-line { width:1px; background:rgba(0,255,140,0.5); }
+.marker-card { background:rgba(10,22,18,0.88); border:1px solid var(--green); border-radius:10px; padding:6px 10px; min-width:80px; text-align:center; backdrop-filter:blur(8px); box-shadow:0 0 12px rgba(0,255,140,0.2); }
+.marker-label { font-size:9px; color:var(--green); font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.06em; }
+.marker-val { font-size:14px; font-weight:600; color:#fff; letter-spacing:-0.02em; line-height:1.2; }
+.marker-unit { font-size:10px; color:var(--text2); font-weight:400; }
+.marker-delta { font-size:10px; color:var(--green); margin-top:1px; }
+
+.s3-btns { display:flex; gap:8px; padding:12px 16px 28px; flex-shrink:0; background:rgba(10,22,18,0.9); }
+.s3-btns button { flex:1; padding:13px; border-radius:12px; font-size:13px; font-weight:600; font-family:'DM Sans',sans-serif; cursor:pointer; border:none; }
+.btn-retry { background:var(--surface); color:var(--text2); border:0.5px solid var(--border2) !important; }
+.btn-save { background:var(--green); color:#0a1612; box-shadow:0 0 16px rgba(0,255,140,0.3); }
+
+/* hidden canvas for capture */
+#snap-canvas { display:none; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <span class="logo-text">BodyScan</span>
+    </div>
+    <div class="step-badge" id="step-badge">Passo 1 de 3</div>
+  </div>
+
+  <!-- ════ S1: METRICS ════ -->
+  <div class="screen active" id="s1">
+    <div class="s1-scroll">
+      <div class="s1-title">Suas medidas</div>
+      <div class="s1-sub">Preencha para gerar a análise visual</div>
+
+      <div class="seg">
+        <button class="seg-btn active" onclick="setSex('M',this)">Masculino</button>
+        <button class="seg-btn" onclick="setSex('F',this)">Feminino</button>
+      </div>
+
+      <div class="sec-label">Dados gerais</div>
+      <div class="fields">
+        <div class="field-row">
+          <div class="field"><label>Idade</label><input type="number" id="age" placeholder="30" inputmode="numeric"></div>
+          <div class="field"><label>Peso (kg)</label><input type="number" id="weight" placeholder="70" step="0.1" inputmode="decimal"></div>
+        </div>
+        <div class="field"><label>Altura (cm)</label><input type="number" id="height" placeholder="170" inputmode="numeric"></div>
+      </div>
+
+      <div class="divider" style="margin:18px 0 4px;"></div>
+      <div class="sec-label">Medidas (fita métrica)</div>
+      <div class="fields">
+        <div class="field-row">
+          <div class="field"><label>Pescoço (cm)</label><input type="number" id="neck" placeholder="38" inputmode="numeric"></div>
+          <div class="field"><label>Braço (cm)</label><input type="number" id="arm" placeholder="32" inputmode="numeric"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Cintura (cm)</label><input type="number" id="waist" placeholder="80" inputmode="numeric"></div>
+          <div class="field"><label>Quadril (cm)</label><input type="number" id="hip" placeholder="95" inputmode="numeric"></div>
+        </div>
+        <div class="field"><label>Coxa (cm)</label><input type="number" id="thigh" placeholder="55" inputmode="numeric"></div>
+      </div>
+    </div>
+    <button class="btn-cta" onclick="goToCamera()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Abrir câmera traseira
+    </button>
+  </div>
+
+  <!-- ════ S2: CAMERA ════ -->
+  <div class="screen" id="s2">
+    <div class="cam-wrap" id="cam-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="snap-canvas"></canvas>
+
+      <div class="guide-frame">
+        <div class="guide-oval" id="guide-oval">
+          <div class="scan-line" id="scan-line"></div>
+        </div>
+      </div>
+      <div class="corner c-tl"></div>
+      <div class="corner c-tr"></div>
+      <div class="corner c-bl"></div>
+      <div class="corner c-br"></div>
+
+      <div class="cam-bottom">
+        <div class="cam-msg" id="cam-msg">Posicione o corpo inteiro no quadro</div>
+        <div class="cam-sub" id="cam-sub">Câmera traseira · distância ~1,5 m</div>
+        <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+        <div class="cam-btns">
+          <button id="btn-capture" onclick="startCapture()">Fotografar e escanear</button>
+          <button class="btn-back" onclick="backToMetrics()">Voltar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cam-error" id="cam-error">
+      <h3 id="err-title">Câmera não disponível</h3>
+      <p id="err-body">Não foi possível acessar a câmera.</p>
+      <div class="err-tip" id="err-tip"></div>
+      <button class="btn-cta" style="margin:8px 0 0;width:100%;" onclick="retryCam()">Tentar novamente</button>
+      <button class="btn-back" style="margin-top:6px;" onclick="skipToResult()">Calcular sem câmera</button>
+    </div>
+  </div>
+
+  <!-- ════ S3: RESULT ════ -->
+  <div class="screen" id="s3">
+    <div class="s3-wrap">
+      <canvas id="result-canvas"></canvas>
+      <div class="markers-layer" id="markers-layer"></div>
+    </div>
+    <div class="s3-btns">
+      <button class="btn-retry s3-btns" onclick="backToMetrics()" style="flex:1;padding:13px;border-radius:12px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;background:var(--surface);color:var(--text2);border:0.5px solid var(--border2);">Novo scan</button>
+      <button class="btn-save s3-btns" onclick="saveImage()" style="flex:1;padding:13px;border-radius:12px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;background:var(--green);color:#0a1612;border:none;box-shadow:0 0 16px rgba(0,255,140,0.3);">Salvar imagem</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let sex='M', stream=null, scanTimer=null, capturedBlob=null;
+
+function setSex(s,btn){
+  sex=s;
+  document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function v(id){return parseFloat(document.getElementById(id).value)||0;}
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const labels={s1:'Passo 1 de 3',s2:'Passo 2 de 3',s3:'Resultado'};
+  document.getElementById('step-badge').textContent=labels[id]||'';
+}
+
+// ── CAMERA INIT ──
+async function goToCamera(){
+  const w=v('weight'),h=v('height'),a=v('age');
+  if(!w||!h||!a){alert('Preencha ao menos peso, altura e idade.');return;}
+  show('s2');
+  document.getElementById('cam-wrap').style.display='block';
+  document.getElementById('cam-error').style.display='none';
+  await initCamera();
+}
+
+async function initCamera(){
+  try{
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+    // Try environment (rear) camera first
+    const constraints={
+      video:{facingMode:{exact:'environment'},width:{ideal:1920},height:{ideal:1080}},
+      audio:false
+    };
+    try{
+      stream=await navigator.mediaDevices.getUserMedia(constraints);
+    }catch(e){
+      // Fallback: any camera
+      stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+    }
+    const vid=document.getElementById('video');
+    vid.srcObject=stream;
+    await vid.play();
+    document.getElementById('cam-wrap').style.display='block';
+    document.getElementById('cam-error').style.display='none';
+    document.getElementById('cam-msg').textContent='Câmera traseira ativa';
+    document.getElementById('cam-sub').textContent='Corpo inteiro visível · distância ~1,5 m';
+  }catch(err){
+    showCamError(err);
+  }
+}
+
+function showCamError(err){
+  document.getElementById('cam-wrap').style.display='none';
+  const el=document.getElementById('cam-error');
+  el.style.display='flex';
+  let title='Câmera não disponível',body='',tip='';
+  if(err.name==='NotAllowedError'||err.name==='PermissionDeniedError'){
+    title='Permissão negada';
+    body='O acesso à câmera foi bloqueado pelo Chrome.';
+    tip='Como ativar:\n1. Toque no ícone 🔒 na barra de endereço\n2. Permissões do site\n3. Ative "Câmera"\n4. Recarregue a página';
+  }else if(location.protocol==='file:'){
+    title='HTTPS necessário';
+    body='A câmera só funciona via HTTPS ou localhost.';
+    tip='Hospede o arquivo em um servidor web.\nOu use "Calcular sem câmera" abaixo.';
+  }else{
+    body='Erro: '+err.name+' — '+err.message;
+    tip='Verifique se a câmera não está em uso por outro app.';
+  }
+  document.getElementById('err-title').textContent=title;
+  document.getElementById('err-body').textContent=body;
+  document.getElementById('err-tip').textContent=tip;
+}
+
+function retryCam(){
+  document.getElementById('cam-wrap').style.display='block';
+  document.getElementById('cam-error').style.display='none';
+  initCamera();
+}
+function skipToResult(){
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  renderResult(null);
+}
+
+// ── CAPTURE & SCAN ANIMATION ──
+function startCapture(){
+  const btn=document.getElementById('btn-capture');
+  btn.disabled=true;
+  document.getElementById('scan-line').style.display='block';
+  
+  const msgs=[
+    ['Detectando silhueta...','Mantenha-se imóvel'],
+    ['Mapeando contorno...','Quase pronto'],
+    ['Calculando composição...','Processando dados'],
+    ['Finalizando...','Gerando resultado']
+  ];
+  let pct=0,mi=0;
+  const fill=document.getElementById('prog-fill');
+  const msgEl=document.getElementById('cam-msg');
+  const subEl=document.getElementById('cam-sub');
+
+  // Capture frame at halfway
+  let captured=false;
+  scanTimer=setInterval(()=>{
+    pct+=2.5;
+    fill.style.width=pct+'%';
+    const idx=Math.min(msgs.length-1,Math.floor((pct/100)*msgs.length));
+    if(idx!==mi){mi=idx;msgEl.textContent=msgs[mi][0];subEl.textContent=msgs[mi][1];}
+    // Capture photo at 40%
+    if(pct>=40&&!captured){captured=true;captureFrame();}
+    if(pct>=100){
+      clearInterval(scanTimer);
+      document.getElementById('scan-line').style.display='none';
+      setTimeout(()=>{
+        if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+        renderResult(capturedBlob);
+      },400);
+    }
+  },60);
+}
+
+function captureFrame(){
+  const vid=document.getElementById('video');
+  const snap=document.getElementById('snap-canvas');
+  snap.width=vid.videoWidth||vid.offsetWidth;
+  snap.height=vid.videoHeight||vid.offsetHeight;
+  const ctx=snap.getContext('2d');
+  ctx.drawImage(vid,0,0,snap.width,snap.height);
+  capturedBlob=snap.toDataURL('image/jpeg',0.92);
+}
+
+// ── RESULT RENDERING ──
+function calcBody(){
+  const weight=v('weight'),height=v('height'),age=v('age'),
+        waist=v('waist')||(sex==='M'?85:75),
+        neck=v('neck')||(sex==='M'?38:33),
+        hip=v('hip')||(sex==='M'?95:100),
+        thigh=v('thigh')||(sex==='M'?55:58),
+        arm=v('arm')||(sex==='M'?32:28);
+  let bf;
+  if(sex==='M') bf=495/(1.0324-0.19077*Math.log10(waist-neck)+0.15456*Math.log10(height))-450;
+  else bf=495/(1.29579-0.35004*Math.log10(waist+hip-neck)+0.22100*Math.log10(height))-450;
+  bf=Math.max(3,Math.min(55,bf));
+  const bmr=sex==='M'?10*weight+6.25*height-5*age+5:10*weight+6.25*height-5*age-161;
+  const bmi=weight/((height/100)**2);
+  return{weight,height,age,waist,neck,hip,thigh,arm,bf:bf.toFixed(1),bmr:Math.round(bmr),bmi:bmi.toFixed(1)};
+}
+
+function renderResult(imgData){
+  show('s3');
+  const d=calcBody();
+  const rc=document.getElementById('result-canvas');
+  const wrap=document.querySelector('.s3-wrap');
+  const W=wrap.offsetWidth,H=wrap.offsetHeight;
+  rc.width=W;rc.height=H;
+  const ctx=rc.getContext('2d');
+
+  function drawOverlay(){
+    // Dark bg
+    ctx.fillStyle='#0a1612';
+    ctx.fillRect(0,0,W,H);
+
+    if(imgData){
+      const img=new Image();
+      img.onload=()=>{
+        // Draw photo
+        const iw=img.naturalWidth,ih=img.naturalHeight;
+        const scale=Math.min(W/iw,H/ih);
+        const dw=iw*scale,dh=ih*scale;
+        const dx=(W-dw)/2,dy=(H-dh)/2;
+        ctx.drawImage(img,dx,dy,dw,dh);
+        // Dark overlay
+        ctx.fillStyle='rgba(10,22,18,0.45)';
+        ctx.fillRect(0,0,W,H);
+        drawBodyOutline(ctx,W,H);
+        placeMarkers(d,W,H);
+      };
+      img.src=imgData;
+    }else{
+      drawBodyOutline(ctx,W,H);
+      // Draw a simple silhouette when no photo
+      drawSilhouette(ctx,W,H);
+      placeMarkers(d,W,H);
+    }
+  }
+  drawOverlay();
+}
+
+function drawBodyOutline(ctx,W,H){
+  const cx=W/2;
+  const top=H*0.06, bot=H*0.94;
+  const bodyH=bot-top;
+  // Glow
+  ctx.shadowColor='#00FF8C';
+  ctx.shadowBlur=18;
+  ctx.strokeStyle='#00FF8C';
+  ctx.lineWidth=2.5;
+  ctx.globalAlpha=0.85;
+
+  // Head
+  const headR=bodyH*0.07;
+  const headCY=top+headR;
+  ctx.beginPath();
+  ctx.arc(cx,headCY,headR,0,Math.PI*2);
+  ctx.stroke();
+
+  // Neck
+  const neckW=bodyH*0.05;
+  const neckTop=headCY+headR;
+  const neckBot=neckTop+bodyH*0.04;
+
+  // Torso
+  const shoulderY=neckBot;
+  const shoulderW=bodyH*0.22;
+  const hipY=shoulderY+bodyH*0.38;
+  const hipW=bodyH*0.2;
+  const waistY=(shoulderY+hipY)*0.5+bodyH*0.02;
+  const waistW=bodyH*0.15;
+
+  ctx.beginPath();
+  // left shoulder
+  ctx.moveTo(cx-neckW,neckTop);
+  ctx.lineTo(cx-shoulderW,shoulderY);
+  // left waist
+  ctx.quadraticCurveTo(cx-shoulderW*1.05,waistY,cx-waistW,waistY);
+  // left hip
+  ctx.quadraticCurveTo(cx-waistW,hipY,cx-hipW,hipY);
+  // right hip
+  ctx.lineTo(cx+hipW,hipY);
+  // right waist
+  ctx.quadraticCurveTo(cx+waistW,hipY,cx+waistW,waistY);
+  // right shoulder
+  ctx.quadraticCurveTo(cx+shoulderW*1.05,waistY,cx+shoulderW,shoulderY);
+  ctx.lineTo(cx+neckW,neckTop);
+  ctx.stroke();
+
+  // Neck lines
+  ctx.beginPath();
+  ctx.moveTo(cx-neckW,neckTop);
+  ctx.lineTo(cx-neckW,neckBot);
+  ctx.moveTo(cx+neckW,neckTop);
+  ctx.lineTo(cx+neckW,neckBot);
+  ctx.stroke();
+
+  // Left arm
+  const armTopX=cx-shoulderW,armTopY=shoulderY;
+  const armBotX=cx-shoulderW*1.1,armBotY=shoulderY+bodyH*0.32;
+  ctx.beginPath();
+  ctx.moveTo(armTopX,armTopY);
+  ctx.quadraticCurveTo(armTopX-bodyH*0.08,armTopY+bodyH*0.12,armBotX,armBotY);
+  ctx.stroke();
+  // Right arm
+  ctx.beginPath();
+  ctx.moveTo(W-armTopX,armTopY);
+  ctx.quadraticCurveTo(W-armTopX+bodyH*0.08,armTopY+bodyH*0.12,W-armBotX,armBotY);
+  ctx.stroke();
+
+  // Legs
+  const legTopY=hipY;
+  const legBotY=bot;
+  const legSep=hipW*0.35;
+  // Left leg
+  ctx.beginPath();
+  ctx.moveTo(cx-hipW,legTopY);
+  ctx.quadraticCurveTo(cx-legSep-bodyH*0.04,legTopY+bodyH*0.22,cx-legSep-bodyH*0.01,legBotY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx,legTopY);
+  ctx.quadraticCurveTo(cx-legSep+bodyH*0.02,legTopY+bodyH*0.22,cx-legSep+bodyH*0.04,legBotY);
+  ctx.stroke();
+  // Right leg
+  ctx.beginPath();
+  ctx.moveTo(cx+hipW,legTopY);
+  ctx.quadraticCurveTo(cx+legSep+bodyH*0.04,legTopY+bodyH*0.22,cx+legSep+bodyH*0.01,legBotY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx,legTopY);
+  ctx.quadraticCurveTo(cx+legSep-bodyH*0.02,legTopY+bodyH*0.22,cx+legSep-bodyH*0.04,legBotY);
+  ctx.stroke();
+
+  ctx.shadowBlur=0;
+  ctx.globalAlpha=1;
+}
+
+function drawSilhouette(ctx,W,H){
+  // subtle fill when no photo
+  const cx=W/2,top=H*0.06,bot=H*0.94,bodyH=bot-top;
+  ctx.fillStyle='rgba(0,255,140,0.04)';
+  ctx.beginPath();
+  const headR=bodyH*0.07,headCY=top+headR;
+  const neckW=bodyH*0.05,neckTop=headCY+headR,neckBot=neckTop+bodyH*0.04;
+  const shoulderY=neckBot,shoulderW=bodyH*0.22;
+  const hipY=shoulderY+bodyH*0.38,hipW=bodyH*0.2;
+  const waistY=(shoulderY+hipY)*0.5+bodyH*0.02,waistW=bodyH*0.15;
+  ctx.moveTo(cx-neckW,neckTop);
+  ctx.lineTo(cx-shoulderW,shoulderY);
+  ctx.quadraticCurveTo(cx-shoulderW*1.05,waistY,cx-waistW,waistY);
+  ctx.quadraticCurveTo(cx-waistW,hipY,cx-hipW,hipY);
+  ctx.lineTo(cx+hipW,hipY);
+  ctx.quadraticCurveTo(cx+waistW,hipY,cx+waistW,waistY);
+  ctx.quadraticCurveTo(cx+shoulderW*1.05,waistY,cx+shoulderW,shoulderY);
+  ctx.lineTo(cx+neckW,neckTop);
+  ctx.fill();
+}
+
+function placeMarkers(d,W,H){
+  const layer=document.getElementById('markers-layer');
+  layer.innerHTML='';
+  const cx=W/2,top=H*0.06,bot=H*0.94,bodyH=bot-top;
+  const headR=bodyH*0.07,headCY=top+headR;
+  const neckBot=headCY+headR+bodyH*0.04;
+  const shoulderY=neckBot,shoulderW=bodyH*0.22;
+  const hipY=shoulderY+bodyH*0.38;
+  const waistY=(shoulderY+hipY)*0.5+bodyH*0.02;
+  const armMidY=shoulderY+bodyH*0.16;
+  const thighY=hipY+bodyH*0.15;
+
+  const markers=[
+    {label:'Pescoço',val:d.neck,unit:'cm',x:cx,y:headCY+headR+bodyH*0.025,side:'right',lineH:30},
+    {label:'Braço',val:d.arm,unit:'cm',x:cx-shoulderW*1.05,y:armMidY,side:'left',lineH:28},
+    {label:'Cintura',val:d.waist,unit:'cm',x:cx,y:waistY,side:'right',lineH:32},
+    {label:'Quadril',val:d.hip,unit:'cm',x:cx,y:hipY,side:'left',lineH:30},
+    {label:'Coxa',val:d.thigh,unit:'cm',x:cx-(bodyH*0.1),y:thighY,side:'left',lineH:30},
+  ];
+
+  markers.forEach((m,i)=>{
+    const el=document.createElement('div');
+    el.className='marker';
+    el.style.left=m.x+'px';
+    el.style.top=m.y+'px';
+    el.style.animationDelay=(i*0.12)+'s';
+    el.style.flexDirection=m.side==='left'?'row-reverse':'row';
+    el.style.alignItems='center';
+
+    const lh=m.lineH;
+    el.innerHTML=`
+      <div class="marker-dot"></div>
+      <div style="width:${lh}px;height:1px;background:rgba(0,255,140,0.4);box-shadow:0 0 4px rgba(0,255,140,0.3);"></div>
+      <div class="marker-card">
+        <div class="marker-label">${m.label}</div>
+        <div class="marker-val">${m.val}<span class="marker-unit"> ${m.unit}</span></div>
+      </div>
+    `;
+    layer.appendChild(el);
+  });
+}
+
+function backToMetrics(){
+  if(scanTimer)clearInterval(scanTimer);
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  document.getElementById('prog-fill').style.width='0%';
+  document.getElementById('btn-capture').disabled=false;
+  document.getElementById('scan-line').style.display='none';
+  capturedBlob=null;
+  show('s1');
+}
+
+function saveImage(){
+  const rc=document.getElementById('result-canvas');
+  const a=document.createElement('a');
+  a.href=rc.toDataURL('image/png');
+  a.download='bodyscan_resultado.png';
+  a.click();
+}
+</script>
+</body>
+</html>
